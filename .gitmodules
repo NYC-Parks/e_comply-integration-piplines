@@ -1,0 +1,6 @@
+[submodule "ParksGIS"]
+	path = ParksGIS
+	url = https://github.com/NYC-Parks/ParksGIS
+[submodule "eComply"]
+	path = eComply
+	url = https://github.com/NYC-Parks/eComply
