@@ -1,59 +1,130 @@
-from unittest.mock import MagicMock, patch
-from filters import apply_edits, LayerEdits
+import pytest
+import filters
+from datetime import datetime
+from pandas import DataFrame, Series
 
 
-def test_apply_edits_with_valid_deltas():
-    mock_repo = MagicMock()
-    mock_repo.apply_edits.return_value = "mock_result"
-
-    context = {
-        "deltas": {
-            1: {"adds": [1, 2], "updates": [3, 4]},
-            2: {"adds": [5], "updates": []},
-        },
-        "repo": mock_repo,
-    }
-
-    with patch("filters.filter_logger.debug") as mock_debug, patch(
-        "filters.to_json", return_value="mock_json"
-    ):
-
-        result = apply_edits(context)
-
-        # Verify repo.apply_edits was called with the expected LayerEdits
-        expected_layer_edits = [
-            LayerEdits(1, adds=[1, 2], updates=[3, 4]),
-            LayerEdits(2, adds=[5], updates=[]),
-        ]
-        mock_repo.apply_edits.assert_called_once_with(expected_layer_edits)
-
-        # Verify logging was called
-        assert mock_debug.call_count > 0
-
-        # Ensure context is returned unchanged
-        assert result == context
+# Fixtures
+@pytest.fixture
+def sample_dataframe():
+    return DataFrame(
+        {
+            "id": [1, 2, 3],
+            "name": ["A", "B", "C"],
+            "value": [10, 20, 30],
+        }
+    )
 
 
-def test_apply_edits_with_no_deltas():
-    context = {"deltas": {}, "repo": MagicMock()}
-    result = apply_edits(context)
-    assert result == context  # Function should return unchanged context
+@pytest.fixture
+def sample_series():
+    return Series([1, 2, 3])
 
 
-def test_apply_edits_with_exception():
-    mock_repo = MagicMock()
-    mock_repo.apply_edits.side_effect = Exception("Test Exception")
+# Test exception_handler
+def test_exception_handler():
+    with pytest.raises(Exception) as exc_info:
+        filters.exception_handler(ValueError("test error"))
+    assert "function" in str(exc_info.value)
+    assert "inner" in str(exc_info.value)
 
-    context = {
-        "deltas": {"layer1": {"adds": [1]}},
-        "repo": mock_repo,
-    }
 
-    with patch("your_module.exception_handler") as mock_exception_handler:
-        result = apply_edits(context)
+# Test epoch_to_datetime
+@pytest.mark.parametrize(
+    "epoch,expected",
+    [
+        (1609459200000, datetime(2020, 12, 31, 19, 0)),
+        (0, datetime(1969, 12, 31, 19, 0)),
+    ],
+)
+def test_epoch_to_local_datetime(epoch, expected):
+    result = filters.epoch_to_local_datetime(epoch)
+    assert result == expected
 
-        # Verify exception handler was called
-        mock_exception_handler.assert_called_once()
 
-        # Ensure context is returned unchanged
-        assert result == context
+# Test to_json
+def test_to_json_dataframe(sample_dataframe):
+    result = filters.to_json(sample_dataframe)
+    assert isinstance(result, str)
+    assert '"id":1' in result
+    assert '"name":"A"' in result
+
+
+def test_to_json_dict():
+    data = {"key": "value"}
+    result = filters.to_json(data)
+    assert result == '{"key": "value"}'
+
+
+# Test join
+@pytest.mark.parametrize(
+    "input_data,with_quotes,expected",
+    [
+        ([1, 2, 3], False, "1,2,3"),
+        ([1, 2, 3], True, "'1','2','3'"),
+        (["a", "b", "c"], False, "a,b,c"),
+        (Series([1, 2, 3]), False, "1,2,3"),
+    ],
+)
+def test_join(input_data, with_quotes, expected):
+    result = filters.join(input_data, with_quotes)
+    assert result == expected
+
+
+# Test filter_Nones
+def test_filter_Nones():
+    df = DataFrame({"id": [1, 2, None, 4], "value": [10, 20, 30, 40]})
+    result = filters.filter_Nones(df, "id")
+    assert len(result) == 3
+    assert None not in result["id"].values
+
+
+# Test update_df
+def test_update_df(sample_dataframe):
+    source = DataFrame({"id": [1, 3], "new_value": [100, 300]})
+
+    result = filters.update_df(sample_dataframe, source, "id", {"value": "new_value"})
+    
+    assert result.at[0, "value"] == 100
+    assert result.at[1, "value"] == 20
+    assert result.at[2, "value"] == 300
+
+
+def test_update_df_with_array_key():
+    dest = DataFrame({"key": [[1, 2], [3, 4]], "value": ["A", "B"]})
+    source = DataFrame({"key": [[1, 2], [5, 6]], "new_value": ["X", "Y"]})
+
+    result = filters.update_df(dest, source, "key", {"value": "new_value"})
+
+    assert result.at[0, "value"] == "X"
+
+
+# Test pipeline
+def test_pipeline_success():
+    def func1(ctx):
+        ctx["step1"] = True
+        return ctx
+
+    def func2(ctx):
+        ctx["step2"] = True
+        return ctx
+
+    context = {"initial": True}
+    result = filters.pipeline(context, func1, func2)
+
+    assert result["initial"] is True
+    assert result["step1"] is True
+    assert result["step2"] is True
+
+
+def test_pipeline_early_termination():
+    def func1(ctx):
+        return None
+
+    def func2(ctx):
+        pytest.fail("Should not be called")
+
+    context = {"initial": True}
+    result = filters.pipeline(context, func1, func2)
+
+    assert result["initial"] is True

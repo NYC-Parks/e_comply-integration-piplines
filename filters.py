@@ -5,8 +5,13 @@ from logging import config, getLogger
 from numpy import ndarray
 from pandas import DataFrame, Series, merge
 from typing import Any, Callable, Literal
-
-from ParksGIS.ParksGIS import LayerDomainNames, LayerEdits, LayerQuery, LayerServerGen, Server
+from ParksGIS.ParksGIS import (
+    LayerDomainNames,
+    LayerEdits,
+    LayerQuery,
+    LayerServerGen,
+    Server,
+)
 
 filter_logger = getLogger("[ filters ]")
 
@@ -24,7 +29,7 @@ def exception_handler(e: Exception) -> None:
     )
 
 
-def epoch_to_datetime(epoch: int) -> datetime:
+def epoch_to_local_datetime(epoch: int) -> datetime:
     return datetime.fromtimestamp(epoch / 1000)
 
 
@@ -46,7 +51,7 @@ def join(
 
 
 def filter_Nones(data: DataFrame | Series, key: str) -> DataFrame | Series:
-    return data[~data[key].isna()]
+    return data[data[key].notna()]
 
 
 def update_df(
@@ -55,50 +60,32 @@ def update_df(
     key: str,
     map: dict[str, str],
 ) -> DataFrame:
-    unhasablekey = False
-    keyType = source.at[0, key]
-
-    # create temp key for unhashable arrays
-    if isinstance(keyType, list) or isinstance(keyType, ndarray):
-        unhasablekey = True
-
-        destinationKey = key + "dest"
-        destination[destinationKey] = destination[key].apply(
-            lambda x: "".join(str(i) for i in x)
-        )
-
-        sourceKey = key + "src"
-        source[sourceKey] = source[key].apply(lambda x: "".join(str(i) for i in x))
-
-    merged = destination.merge(
-        source,
-        left_on=destinationKey,
-        right_on=sourceKey,
-        how="left",
-        suffixes=(None, "_right"),
-        indicator=True,
+    unhasable_key = isinstance(
+        source.at[0, key],
+        list,
+    ) or isinstance(
+        source.at[0, key],
+        ndarray,
     )
 
-    # map source columns to destination columns
-    for dest_key, src_key in map.items():
-        true_key = src_key + ("_right" if dest_key == src_key else "")
-        merged[dest_key] = merged[true_key]
+    dict = {
+        str(row[key]) if unhasable_key else row[key]: row
+        for _, row in source.iterrows()
+    }
 
-    # remove all added columns
-    removeCols = source.columns.to_list()
-    removeCols.append("_merge")
-    if unhasablekey:
-        removeCols.append(destinationKey)
-        removeCols.append(sourceKey)
+    result = DataFrame(columns=destination.columns)
 
-    result = merged.drop(columns=removeCols)
+    for _, dest_row in destination.iterrows():
+        result_row = dest_row.copy()
+        hashable_key = str(dest_row[key]) if unhasable_key else dest_row[key]
 
-    renameCols = {}
-    for item in result.columns:
-        if "_right" in item:
-            renameCols[item] = item.replace("_right", "")
+        if hashable_key in dict:
+            src_row = dict[hashable_key]
+            for dest_col, src_col in map.items():
+                result_row[dest_col] = src_row[src_col]
+        result.loc[len(result)] = result_row
 
-    return result.rename(columns=renameCols)
+    return result
 
 
 def pipeline(
@@ -459,7 +446,7 @@ def post_domains(context: dict) -> dict | None:
 
 def contract_get_edits(context: dict) -> dict | None:
     layer_id = 1
-    from_date_time = epoch_to_datetime(context["server_gens"].at[0, "Contract"])
+    from_date_time = epoch_to_local_datetime(context["server_gens"].at[0, "Contract"])
 
     try:
         response = context["service"].get_contracts(from_date_time)
@@ -640,7 +627,7 @@ def work_order_post_changes(context: dict) -> dict | None:
 # Receiving
 def work_order_get_edits(context: dict) -> dict | None:
     layer_id = 0
-    from_date_time = epoch_to_datetime(context["server_gens"].at[0, "WorkOrder"])
+    from_date_time = epoch_to_local_datetime(context["server_gens"].at[0, "WorkOrder"])
 
     try:
         response = context["service"].get_work_orders(from_date_time)
@@ -740,7 +727,7 @@ def wo_update_associated_platingSpace(context: dict) -> dict:
 
 def work_order_line_items_get_edits(context: dict) -> dict | None:
     layer_id = 2
-    from_date_time = epoch_to_datetime(context["server_gens"].at[0, "WorkOrder"])
+    from_date_time = epoch_to_local_datetime(context["server_gens"].at[0, "WorkOrder"])
 
     try:
         response = context["service"].get_work_order_line_items(from_date_time)
