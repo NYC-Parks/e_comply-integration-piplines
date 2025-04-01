@@ -5,8 +5,6 @@ from datetime import datetime
 from pandas import DataFrame, Series
 
 
-# Fixtures
-@pytest.fixture
 def sample_dataframe():
     return DataFrame(
         {
@@ -15,21 +13,6 @@ def sample_dataframe():
             "value": [10, 20, 30],
         }
     )
-
-
-@pytest.fixture
-def sample_series():
-    return Series([1, 2, 3])
-
-
-@pytest.fixture
-def mock_repo():
-    return MagicMock()
-
-
-@pytest.fixture
-def mock_service():
-    return MagicMock()
 
 
 # Test exception_handler
@@ -41,7 +24,7 @@ def test_exception_handler():
     with pytest.raises(Exception) as exc_info:
         filters.exception_handler(test_error)
 
-    error_dict = eval(str(exc_info.value))
+    error_dict = str(exc_info.value)
     assert "function" in error_dict
     assert "inner" in error_dict
 
@@ -63,9 +46,12 @@ def test_epoch_to_local_datetime(epoch, expected):
 
 
 # Test to_json
-def test_to_json_dataframe(sample_dataframe):
+def test_to_json_dataframe():
+    # Arrange
+    dataframe = sample_dataframe()
+
     # Act
-    result = filters.to_json(sample_dataframe)
+    result = filters.to_json(dataframe)
 
     # Assert
     assert isinstance(result, str)
@@ -102,6 +88,28 @@ def test_join(input_data, with_quotes, expected):
     assert result == expected
 
 
+def test_join_empty_list():
+    # Arrange
+    empty_list = []
+
+    # Act
+    result = filters.join(empty_list)
+
+    # Assert
+    assert result == ""
+
+
+def test_join_mixed_types():
+    # Arrange
+    mixed_list = [1, "two", 3.0, True]
+
+    # Act
+    result = filters.join(mixed_list)
+
+    # Assert
+    assert result == "1,two,3.0,True"
+
+
 # Test filter_Nones
 def test_filter_Nones():
     # Arrange
@@ -116,14 +124,13 @@ def test_filter_Nones():
 
 
 # Test update_df
-def test_update_df(sample_dataframe):
+def test_update_df():
     # Arrange
-    source_data = DataFrame({"id": [1, 3], "new_value": [100, 300]})
+    dest = sample_dataframe()
+    source = DataFrame({"id": [1, 3], "new_value": [100, 300]})
 
     # Act
-    result = filters.update_df(
-        sample_dataframe, source_data, "id", {"value": "new_value"}
-    )
+    result = filters.update_df(dest, source, "id", {"value": "new_value"})
 
     # Assert
     assert result.at[0, "value"] == 100
@@ -141,6 +148,36 @@ def test_update_df_with_array_key():
 
     # Assert
     assert result.at[0, "value"] == "X"
+
+
+def test_update_df_empty_source_error():
+    # Arrange
+    dest = DataFrame({"id": [1, 2], "value": ["A", "B"]})
+    source = DataFrame({"id": [], "new_value": []})
+
+    # Act
+    with pytest.raises(Exception) as exc_info:
+        filters.update_df(dest, source, "id", {"value": "new_value"})
+
+    # Assert
+    assert isinstance(exc_info.value, KeyError)
+
+
+def test_update_df_all_columns_mapped():
+    # Arrange
+    dest = DataFrame({"id": [1, 2], "col1": ["A", "B"], "col2": [10, 20]})
+    source = DataFrame({"id": [1], "new_col1": ["X"], "new_col2": [30]})
+
+    # Act
+    result = filters.update_df(
+        dest, source, "id", {"col1": "new_col1", "col2": "new_col2"}
+    )
+
+    # Assert
+    assert result.at[0, "col1"] == "X"
+    assert result.at[0, "col2"] == 30
+    assert result.at[1, "col1"] == "B"
+    assert result.at[1, "col2"] == 20
 
 
 # Test pipeline
@@ -181,31 +218,56 @@ def test_pipeline_early_termination():
     assert result["initial"] is True
 
 
+def test_pipeline_no_functions():
+    # Arrange
+    context = {"test": "data"}
+
+    # Act & Assert
+    with pytest.raises(ValueError) as exc_info:
+        filters.pipeline(context)
+    assert "At least one function must be provided" in str(exc_info.value)
+
+
+def test_pipeline_invalid_function():
+    # Arrange
+    context = {"test": "data"}
+    invalid_func = "not_a_function"
+
+    # Act
+    with pytest.raises(TypeError) as exc_info:
+        filters.pipeline(context, invalid_func)
+
+    # Assert
+    assert "Expected a callable" in str(exc_info.value)
+
+
 # Common Function Tests
-def test_apply_edits(mock_repo):
+def test_apply_edits():
     # Arrange
+    repo = MagicMock()
+    repo.apply_edits.return_value = {}
     test_data = DataFrame({"id": [1, 2], "value": ["A", "B"]})
-    context = {"repo": mock_repo, "deltas": {1: {"adds": test_data}}}
-    mock_repo.apply_edits.return_value = {}
+    context = {"repo": repo, "deltas": {1: {"adds": test_data}}}
 
     # Act
     result = filters.apply_edits(context)
 
     # Assert
-    mock_repo.apply_edits.assert_called_once()
+    repo.apply_edits.assert_called_once()
     assert result == context
 
 
-def test_apply_edits_with_no_deltas(mock_repo):
+def test_apply_edits_with_no_deltas():
     # Arrange
-    context = {"repo": mock_repo, "deltas": {}}
+    repo = MagicMock()
+    context = {"repo": repo, "deltas": {}}
 
     # Act
     result = filters.apply_edits(context)
 
     # Assert
     assert result == context
-    mock_repo.apply_edits.assert_not_called()
+    repo.apply_edits.assert_not_called()
 
 
 @patch("filters.extract_changes")
@@ -241,6 +303,34 @@ def test_extract_changes_no_changes(mock_extract):
     assert result["server_gen"] == 12345
 
 
+@patch("filters.Server")
+def test_extract_changes_empty_changes(mock_server):
+    # Arrange
+    mock_server.extract_changes.return_value = {
+        "layerServerGens": [{"serverGen": 1000}],
+        "edits": [{"objectIds": {"adds": [], "updates": []}}],
+    }
+
+    # Act
+    result = filters.extract_changes(mock_server, 1, 500, ["field1"])
+
+    # Assert
+    assert result["changes"] is None
+    assert result["server_gen"] == 1000
+
+
+@patch("filters.Server")
+def test_extract_changes_error_handling(mock_server):
+    # Arrange
+    mock_server.extract_changes.side_effect = Exception("Network error")
+
+    # Act & Assert
+    with pytest.raises(Exception) as exc_info:
+        filters.extract_changes(mock_server, 1, 500, ["field1"])
+    assert "extract_changes: Network error" in str(exc_info.value)
+
+
+# Test seperate_changes
 def test_seperate_changes():
     # Arrange
     test_changes = [
@@ -260,17 +350,72 @@ def test_seperate_changes():
     assert "objectId" not in result["adds"].columns
 
 
-def test_query_domains(mock_repo):
+def test_seperate_changes_empty_list():
     # Arrange
+    changes = []
+
+    # Act & Assert
+    with pytest.raises(IndexError):
+        filters.seperate_changes(changes)
+
+
+def test_seperate_changes_all_adds():
+    # Arrange
+    changes = [
+        {"objectId": None, "value": "A"},
+        {"objectId": None, "value": "B"},
+    ]
+
+    # Act
+    result = filters.seperate_changes(changes)
+
+    # Assert
+    assert "adds" in result
+    assert "updates" not in result
+    assert len(result["adds"]) == 2
+
+
+def test_seperate_changes_all_updates():
+    # Arrange
+    changes = [
+        {"objectId": 1, "value": "A"},
+        {"objectId": 2, "value": "B"},
+    ]
+
+    # Act
+    result = filters.seperate_changes(changes)
+
+    # Assert
+    assert "updates" in result
+    assert "adds" not in result
+    assert len(result["updates"]) == 2
+
+
+# Test set_deltas error cases
+def test_set_deltas_missing_layer_id():
+    # Arrange
+    context = {}
+    data = DataFrame({"col1": [1, 2]})
+
+    # Act & Assert
+    with pytest.raises(Exception) as exc_info:
+        filters.set_deltas(context, data)
+    assert "layer_id is required" in str(exc_info.value)
+
+
+# Test query_domains
+def test_query_domains():
+    # Arrange
+    repo = MagicMock()
     test_context = {
-        "repo": mock_repo,
+        "repo": repo,
         "layerId": 1,
         "domainNames": ["domain1", "domain2"],
     }
     expected_response = [
         {"name": "domain1", "codedValues": [{"code": 1, "name": "Value1"}]}
     ]
-    mock_repo.query_domains.return_value = expected_response
+    repo.query_domains.return_value = expected_response
 
     # Act
     result = filters.query_domains(test_context)
@@ -278,9 +423,10 @@ def test_query_domains(mock_repo):
     # Assert
     assert "domainValues" in result
     assert result["domainValues"] == expected_response
-    mock_repo.query_domains.assert_called_once()
+    repo.query_domains.assert_called_once()
 
 
+# Test post_domains
 def test_post_domains(mock_service):
     # Arrange
     test_context = {
