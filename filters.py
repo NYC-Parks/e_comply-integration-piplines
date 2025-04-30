@@ -99,11 +99,12 @@ def pipeline(
     if not funcs:
         raise ValueError("At least one function must be provided.")
 
-    if "message" in context:
-        __logger.info(context["message"])
+    if "log" in context:
+        __logger.info(context["log"])
+
+    context["output"] = {}
 
     result = context
-
     for _, func in enumerate(funcs):
         if result is None:
             __logger.debug(f"*Pipeline ended before {func.__name__}*")
@@ -368,7 +369,7 @@ def post_domains(context: dict) -> dict | None:
     except Exception as e:
         exception_handler(e)
 
-    context["output"] = f"Domain Values result: {response}"
+    context["output"]["post_domains"] = f"Domain Values result: {response}"
     return context
 
 
@@ -456,7 +457,7 @@ def contract_get_edits(context: dict) -> dict | None:
         exception_handler(e)
 
     if 0 == len(response):
-        context["output"] = "No Contract Changes."
+        context["output"]["contract_get_edits"] = "No Contract Changes."
         return None
 
     deltas = _seperate_changes(response)
@@ -469,7 +470,7 @@ def contract_get_edits(context: dict) -> dict | None:
 def work_order_extract_changes(context: dict) -> dict | None:
     layer_id = 0
 
-    try:
+    try:  # TODO refactor for clarity: only workorders with contract
         contract_ids = context["server_gens_repo"].query(
             [
                 LayerQuery(
@@ -522,7 +523,7 @@ def work_order_extract_changes(context: dict) -> dict | None:
         exception_handler(e)
 
     if result["changes"] is None:
-        context["output"] = "No Work Order changes."
+        context["output"]["work_order_extract_changes"] = "No Work Order changes."
         return None
 
     set_deltas(context, result["changes"], layer_id)
@@ -620,7 +621,7 @@ def work_order_post_changes(context: dict) -> dict | None:
     except Exception as e:
         exception_handler(e)
 
-    context["output"] = f"Work Orders result: {response}"
+    context["output"]["work_orders_post_changes "] = f"Work Orders result: {response}"
     return context
 
 
@@ -637,7 +638,7 @@ def work_order_get_edits(context: dict) -> dict | None:
         exception_handler(e)
 
     if 0 == len(response):
-        context["output"] = "No Work Order changes."
+        context["output"]["work_order_get_edits"] = "No Work Order changes."
         return None
 
     set_deltas(context, {"updates": response}, layer_id)
@@ -737,7 +738,9 @@ def work_order_line_items_get_edits(context: dict) -> dict | None:
         exception_handler(e)
 
     if 0 == len(response):
-        context["output"] = "No Work Order Line Items Changes."
+        context["output"][
+            "work_order_line_items_get_edits"
+        ] = "No Work Order Line Items Changes."
         return None
 
     deltas = _seperate_changes(response)
