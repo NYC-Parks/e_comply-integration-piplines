@@ -6,7 +6,7 @@ from math import isnan
 from numpy import ndarray
 from pandas import DataFrame, Series, merge
 from typing import Any, Callable, Literal
-from ParksGIS.ParksGIS import (
+from ParksGIS import (
     LayerDomainNames,
     LayerEdits,
     LayerQuery,
