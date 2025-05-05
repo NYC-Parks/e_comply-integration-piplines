@@ -1,7 +1,7 @@
 from logging import getLogger
-from ParksGIS.ParksGIS import GISFactory
-from eComply.eComply import eComply
+from ParksGIS import GISFactory
 from filters import *
+import eComply
 
 __logger = getLogger("[ pipelines ]")
 
@@ -39,7 +39,7 @@ try:
         arc_gis + "/server/rest/services/DataPush/ForMSDataPush/FeatureServer"
     )
 
-    e_comply = eComply(
+    e_comply = eComply.API(
         url="https://nycparks-stage.ecomply.us/WebAPI",
         username="ff@ecomply.us",
         password="!test123",
