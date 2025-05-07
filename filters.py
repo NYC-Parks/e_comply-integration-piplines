@@ -621,7 +621,7 @@ def wo_update_associated_inspection(context: dict) -> dict | None:
     return context
 
 
-def wo_update_associated_platingSpace(context: dict) -> dict:
+def wo_update_associated_plantingSpace(context: dict) -> dict:
     layer_id = 2
     key = "plantingSpaceGlobalId"
     edits = DataFrame(get_deltas(context)["updates"])
