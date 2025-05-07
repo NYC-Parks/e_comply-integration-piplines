@@ -483,6 +483,7 @@ def wo_query_associated_planting_space_globalid(context: dict) -> dict | None:
                     )
                 ]
             )[layer_id]
+            .drop(columns=["OBJECTID"])
             .rename(columns={"GlobalID": key})
         )
         __logger.debug(f"Planting Space Ids found: {len(inspections)}")
@@ -523,7 +524,7 @@ def wo_query_associated_planting_space(context: dict) -> dict | None:
                             "StateAssembly",
                             "StreetName",
                             "GlobalID",
-                            "ObjectID",
+                            "OBJECTID",
                         ],
                         f"GlobalID IN ({join(filter_Nones(edits, key)[key], True)})",
                     )
