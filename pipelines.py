@@ -52,7 +52,7 @@ try:
     __logger.info(
         pipeline(
             {
-                "message": "**Pushing Contract Domain Values**",
+                "log": "**Pushing Contract Domain Values**",
                 "service": e_comply_service,
                 "repo": e_comply_repo,
                 "layerId": 1,
@@ -71,7 +71,7 @@ try:
     __logger.info(
         pipeline(
             {
-                "message": "**Pulling Contracts**",
+                "log": "**Pulling Contracts**",
                 "service": e_comply_service,
                 "repo": e_comply_repo,
                 "server_gens": server_gens.copy(),
@@ -83,7 +83,7 @@ try:
     __logger.info(
         pipeline(
             {
-                "message": "**Pushing Work Order Domain Values**",
+                "log": "**Pushing Work Order Domain Values**",
                 "service": e_comply_service,
                 "repo": data_push_repo,
                 "layerId": 0,
@@ -103,7 +103,7 @@ try:
     __logger.info(
         pipeline(
             {
-                "message": "**Pushing Work Orders**",
+                "log": "**Pushing Work Orders**",
                 "service": e_comply_service,
                 "repo": data_push_repo,
                 "server_gens": server_gens.copy(),
@@ -120,7 +120,7 @@ try:
     __logger.info(
         pipeline(
             {
-                "message": "**Pulling Work Orders**",
+                "log": "**Pulling Work Orders**",
                 "service": e_comply_service,
                 "repo": data_push_repo,
                 "server_gens": server_gens.copy(),
@@ -134,7 +134,7 @@ try:
     __logger.info(
         pipeline(
             {
-                "message": "**Pulling Work Order Line Items**",
+                "log": "**Pulling Work Order Line Items**",
                 "service": e_comply_service,
                 "repo": e_comply_repo,
                 "server_gens": server_gens.copy(),

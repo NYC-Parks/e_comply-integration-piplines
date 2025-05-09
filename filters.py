@@ -121,6 +121,9 @@ def pipeline(
     return context
 
 
+##########################################################################################################
+
+
 def configure_rotating_logger(
     filename: str,
     directory: str | None = None,
@@ -157,7 +160,7 @@ def configure_rotating_logger(
                 },
             },
             "root": {
-                "level": "DEBUG",
+                "level": level,
                 "handlers": ["timed_rotating_file", "console"],
             },
         }
