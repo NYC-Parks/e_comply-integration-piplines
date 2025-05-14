@@ -1,7 +1,7 @@
 from logging import getLogger
-from ParksGIS import GISFactory
 from filters import *
-import eComply
+from eComply import API
+from ParksGIS import GISFactory
 
 __logger = getLogger("[ pipelines ]")
 
@@ -36,7 +36,7 @@ try:
     # e_comply = "https://nycparks-test.ecomply.us"
     e_comply = "https://nycparks-stage.ecomply.us"
 
-    e_comply_service = eComply.API(
+    e_comply_service = API(
         url=f"{e_comply}/WebAPI",
         username="ff@ecomply.us",
         password="!test123",
