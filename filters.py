@@ -17,7 +17,7 @@ from ParksGIS import (
 __logger: Logger = getLogger("[ filters ]")
 
 
-# Generic
+# Utility Functions
 def exception_handler(e: Exception) -> None:
     # Get the current frame, then the previous frame (the caller)
     frame = currentframe().f_back
@@ -42,17 +42,29 @@ def to_json(obj: Any) -> str:
 
 
 def join(
-    list: Series | list,
+    items: Series | list,
     withQuotations: bool = False,
 ) -> str:
+    if isinstance(items, Series):
+        items = list(filter_Nones(items))
+
     if withQuotations:
-        return "'" + "','".join(str(i) for i in list) + "'"
+        joined = "','".join(str(i) for i in items)
+        return joined if len(joined) == 0 else f"'{joined}'"
     else:
-        return ",".join(str(i) for i in list)
+        return ",".join(str(i) for i in items)
 
 
-def filter_Nones(data: DataFrame | Series, key: str) -> DataFrame | Series:
-    return data[data[key].notna()]
+def filter_Nones(
+    data: DataFrame | Series,
+    key: str | None = None,
+) -> DataFrame | Series:
+    if isinstance(data, DataFrame):
+        if key is None:
+            raise ValueError("Key required for DataFrame")
+        return data[data[key].notna()]
+    else:
+        return data[data.notna()]
 
 
 def update_df(
@@ -96,6 +108,8 @@ def pipeline(
         dict[str, Any] | None,
     ],
 ) -> dict[str, Any]:
+    __logger = getLogger("[ pipeline ]")
+
     if not funcs:
         raise ValueError("At least one function must be provided.")
 
@@ -107,7 +121,7 @@ def pipeline(
     result = context
     for _, func in enumerate(funcs):
         if result is None:
-            __logger.debug(f"*Pipeline ended before {func.__name__}*")
+            __logger.debug(f"**Pipeline ended before {func.__name__}**")
             break
 
         if not isinstance(func, Callable):
@@ -121,7 +135,25 @@ def pipeline(
     return context
 
 
-##########################################################################################################
+def get_deltas(context: dict) -> DataFrame | dict[str, DataFrame]:
+    return context["deltas"][context["layer_id"]]
+
+
+def set_deltas(
+    context: dict,
+    data: DataFrame | dict[str, DataFrame],
+    layer_id: int | None = None,
+) -> None:
+    if layer_id is not None:
+        context["layer_id"] = layer_id
+
+    if "layer_id" not in context:
+        raise Exception("layer_id is required!")
+
+    if "edits" not in context:
+        context["deltas"] = {}
+
+    context["deltas"][context["layer_id"]] = data
 
 
 def configure_rotating_logger(
@@ -317,27 +349,6 @@ def apply_server_gens_edits(context: dict) -> dict | None:
     return context
 
 
-def get_deltas(context: dict) -> DataFrame | dict[str, DataFrame]:
-    return context["deltas"][context["layer_id"]]
-
-
-def set_deltas(
-    context: dict,
-    data: DataFrame | dict[str, DataFrame],
-    layer_id: int | None = None,
-) -> None:
-    if layer_id is not None:
-        context["layer_id"] = layer_id
-
-    if "layer_id" not in context:
-        raise Exception("layer_id is required!")
-
-    if "edits" not in context:
-        context["deltas"] = {}
-
-    context["deltas"][context["layer_id"]] = data
-
-
 def query_domains(context: dict) -> dict | None:
     try:
         context["domainValues"] = context["repo"].query_domains(
@@ -356,7 +367,7 @@ def query_domains(context: dict) -> dict | None:
 
 
 def post_domains(context: dict) -> dict | None:
-    values = [
+    domain_values = [
         {
             "domainName": domain["name"],
             "code": str(value["code"]),
@@ -367,7 +378,7 @@ def post_domains(context: dict) -> dict | None:
     ]
 
     try:
-        response = context["service"].post_domain_values(values)
+        response = context["service"].post_domain_values(domain_values)
 
     except Exception as e:
         exception_handler(e)
@@ -379,7 +390,8 @@ def post_domains(context: dict) -> dict | None:
 #######################################################################################
 
 
-def contract_get_edits(context: dict) -> dict | None:
+# Domain
+def get_contract_edits(context: dict) -> dict | None:
     layer_id = 1
     from_date_time = epoch_to_local_datetime(context["server_gens"].at[0, "Contract"])
 
@@ -400,20 +412,36 @@ def contract_get_edits(context: dict) -> dict | None:
     return context
 
 
-# Work Order
-def work_order_extract_changes(context: dict) -> dict | None:
-    layer_id = 0
+def query_contract_ids(context: dict) -> dict | None:
+    layer_id = 1
 
-    try:  # TODO refactor for clarity: only workorders with contract
-        contract_ids = context["server_gens_repo"].query(
+    try:
+        contracts = context["server_gens_repo"].query(
             [
                 LayerQuery(
-                    1,
+                    layer_id,
                     ["ContractName"],
                 )
             ]
-        )[1]["ContractName"]
+        )[layer_id]
 
+    except Exception as e:
+        exception_handler(e)
+
+    if contracts.empty:
+        context["output"]["query_contract_ids"] = "No Contracts found."
+        return None
+
+    context["contract_ids"] = (
+        [] if contracts.empty else contracts["ContractName"].tolist()
+    )
+    return context
+
+
+def contract_associated_work_order_extract_changes(context: dict) -> dict | None:
+    layer_id = 0
+
+    try:
         result = extract_changes(
             context["repo"],
             layer_id,
@@ -448,7 +476,7 @@ def work_order_extract_changes(context: dict) -> dict | None:
                 "InspectionGlobalID",
                 "OBJECTID",
             ],
-            f"Contract in ({join(contract_ids)})",
+            f"Contract in ({join(context['contract_ids'])})",
         )
         __logger.debug(
             f"Work Orders Extracted: {0 if result['changes'].empty else len(result['changes'])}"
@@ -457,7 +485,7 @@ def work_order_extract_changes(context: dict) -> dict | None:
     except Exception as e:
         exception_handler(e)
 
-    if result["changes"] is None:
+    if result["changes"].empty:
         context["output"]["work_order_extract_changes"] = "No Work Order changes."
         return None
 
@@ -466,7 +494,7 @@ def work_order_extract_changes(context: dict) -> dict | None:
     return context
 
 
-def wo_query_associated_planting_space_globalid(context: dict) -> dict | None:
+def query_work_order_associated_planting_space_globalid(context: dict) -> dict | None:
     layer_id = 4
     key = "InspectionGlobalID"
     edits = DataFrame(get_deltas(context))
@@ -482,7 +510,7 @@ def wo_query_associated_planting_space_globalid(context: dict) -> dict | None:
                             "GlobalID",
                             "PlantingSpaceGlobalID",
                         ],
-                        f"GlobalID IN ({join(filter_Nones(edits, key)[key], True)})",
+                        f"GlobalID IN ({join(edits[key], True)})",
                     )
                 ]
             )[layer_id]
@@ -501,7 +529,7 @@ def wo_query_associated_planting_space_globalid(context: dict) -> dict | None:
     return context
 
 
-def wo_query_associated_planting_space(context: dict) -> dict | None:
+def query_work_order_associated_planting_space(context: dict) -> dict | None:
     layer_id = 2
     key = "PlantingSpaceGlobalID"
     edits = DataFrame(get_deltas(context))
@@ -529,7 +557,7 @@ def wo_query_associated_planting_space(context: dict) -> dict | None:
                             "GlobalID",
                             "OBJECTID",
                         ],
-                        f"GlobalID IN ({join(filter_Nones(edits, key)[key], True)})",
+                        f"GlobalID IN ({join(edits[key], True)})",
                     )
                 ]
             )[layer_id]
@@ -552,11 +580,11 @@ def wo_query_associated_planting_space(context: dict) -> dict | None:
     return context
 
 
-def work_order_post_changes(context: dict) -> dict | None:
+def post_work_order_changes(context: dict) -> dict | None:
     edits = get_deltas(context)
 
     try:
-        response = context["service"].post_work_orders(edits)
+        response = context["service"].post_work_orders(to_json(edits))
 
     except Exception as e:
         exception_handler(e)
@@ -565,8 +593,7 @@ def work_order_post_changes(context: dict) -> dict | None:
     return context
 
 
-# Receiving
-def work_order_get_edits(context: dict) -> dict | None:
+def get_work_order_edits(context: dict) -> dict | None:
     layer_id = 0
     from_date_time = epoch_to_local_datetime(context["server_gens"].at[0, "WorkOrder"])
 
@@ -585,7 +612,7 @@ def work_order_get_edits(context: dict) -> dict | None:
     return context
 
 
-def wo_update_associated_inspection(context: dict) -> dict | None:
+def update_work_order_associated_inspection(context: dict) -> dict | None:
     layer_id = 4
     key = "plantingSpaceGlobalId"
     edits = DataFrame(get_deltas(context)["updates"])
@@ -624,7 +651,7 @@ def wo_update_associated_inspection(context: dict) -> dict | None:
     return context
 
 
-def wo_update_associated_plantingSpace(context: dict) -> dict:
+def update_work_order_associated_plantingSpace(context: dict) -> dict:
     layer_id = 2
     key = "plantingSpaceGlobalId"
     edits = DataFrame(get_deltas(context)["updates"])
@@ -666,7 +693,7 @@ def wo_update_associated_plantingSpace(context: dict) -> dict:
     return context
 
 
-def work_order_line_items_get_edits(context: dict) -> dict | None:
+def get_work_order_line_items_edits(context: dict) -> dict | None:
     layer_id = 2
     from_date_time = epoch_to_local_datetime(context["server_gens"].at[0, "WorkOrder"])
 

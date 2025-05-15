@@ -27,7 +27,7 @@ def test_contract_get_edits(mock_service):
     }
 
     # Act
-    result = filters.contract_get_edits(context)
+    result = filters.get_contract_edits(context)
 
     # Assert
     assert "deltas" in result
@@ -44,7 +44,7 @@ def test_contract_get_edits_no_changes(mock_service):
     }
 
     # Act
-    result = filters.contract_get_edits(context)
+    result = filters.get_contract_edits(context)
 
     # Assert
     assert result is None
@@ -68,7 +68,7 @@ def test_work_order_extract_changes(stub_extract_changes, mock_repo):
     }
 
     # Act
-    result = filters.work_order_extract_changes(context)
+    result = filters.contract_associated_work_order_extract_changes(context)
 
     # Assert
     assert "deltas" in result
@@ -88,7 +88,7 @@ def test_work_order_extract_changes_no_changes(stub_extract_changes, mock_repo):
     stub_extract_changes.return_value = {"changes": None, "server_gen": 12345}
 
     # Act
-    result = filters.work_order_extract_changes(context)
+    result = filters.contract_associated_work_order_extract_changes(context)
 
     # Assert
     assert result is None
@@ -114,7 +114,7 @@ def test_wo_query_associated_planting_space_globalid(mock_repo):
     }
 
     # Act
-    result = filters.wo_query_associated_planting_space_globalid(context)
+    result = filters.query_work_order_associated_planting_space_globalid(context)
 
     # Assert
     assert "PlantingSpaceGlobalID" in result["deltas"][0].columns
@@ -141,7 +141,7 @@ def test_wo_query_associated_planting_space(mock_repo):
     }
 
     # Act
-    result = filters.wo_query_associated_planting_space(context)
+    result = filters.query_work_order_associated_planting_space(context)
 
     # Assert
     assert "ParkName" in result["deltas"][0].columns
@@ -159,7 +159,7 @@ def test_work_order_post_changes(mock_repo):
     }
 
     # Act
-    result = filters.work_order_post_changes(context)
+    result = filters.post_work_order_changes(context)
 
     # Assert
     assert result["output"] == "Work Orders result: Success"
@@ -179,7 +179,7 @@ def test_work_order_line_items_get_edits(mock_repo):
     }
 
     # Act
-    result = filters.work_order_line_items_get_edits(context)
+    result = filters.get_work_order_line_items_edits(context)
 
     # Assert
     assert "deltas" in result
@@ -196,7 +196,7 @@ def test_work_order_line_items_get_edits_no_changes(mock_service):
     }
 
     # Act
-    result = filters.work_order_line_items_get_edits(context)
+    result = filters.get_work_order_line_items_edits(context)
 
     # Assert
     assert result is None
@@ -229,7 +229,7 @@ def test_wo_update_associated_inspection(mock_repo):
     }
 
     # Act
-    result = filters.wo_update_associated_inspection(context)
+    result = filters.update_work_order_associated_inspection(context)
 
     # Assert
     assert 4 in result["deltas"]
@@ -262,7 +262,7 @@ def test_wo_update_associated_platingSpace(mock_repo):
     }
 
     # Act
-    result = filters.wo_update_associated_plantingSpace(context)
+    result = filters.update_work_order_associated_plantingSpace(context)
 
     # Assert
     assert 2 in result["deltas"]
