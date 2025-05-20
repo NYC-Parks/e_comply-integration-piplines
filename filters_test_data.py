@@ -1,9 +1,10 @@
 from logging import getLogger
 from pandas import DataFrame
-from ParksGIS.ParksGIS import LayerQuery
+from ParksGIS import LayerQuery
 from filters import set_deltas
 
 __logger = getLogger("[ Test Data ]")
+
 
 def mock_server_gens():
     import time
