@@ -16,7 +16,7 @@ try:
     )
 
     credential = ""
-    proxy_url = "bcpxy.nycnet:8080"
+    proxy_url = "http://bcpxy.nycnet:8080"
     set_proxy_variables(credential + proxy_url)
 
     # Set ArcGIS Environemnt
