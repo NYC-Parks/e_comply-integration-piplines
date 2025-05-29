@@ -4,7 +4,7 @@ from eComply import API
 from ParksGIS import GISFactory
 from filters_test_data import *
 
-__logger = getLogger("[ pipelines ]")
+__logger = getLogger("[ main ]")
 
 
 try:
