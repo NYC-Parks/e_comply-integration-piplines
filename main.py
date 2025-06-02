@@ -10,7 +10,7 @@ __logger = getLogger("[ main ]")
 try:
     configure_rotating_logger(
         filename="eComply.log",
-        directory="eComply_logs",
+        directory="logs",
         level="DEBUG",
         # level="INFO",
     )

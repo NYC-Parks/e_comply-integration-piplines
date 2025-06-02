@@ -2,9 +2,8 @@ from datetime import datetime
 from inspect import currentframe
 from json import dumps
 from logging import Logger, config, getLogger
-from math import isnan
 from numpy import ndarray
-from pandas import DataFrame, Series, merge
+from pandas import DataFrame, Series, merge, isna
 from typing import Any, Callable, Literal
 from ParksGIS import (
     LayerDomainNames,
@@ -293,7 +292,7 @@ def _seperate_changes(changes: DataFrame) -> dict[str, DataFrame]:
     adds = DataFrame(columns=changes.columns)
     updates = DataFrame(columns=changes.columns)
     for _, item in changes.iterrows():
-        if isnan(item["objectId"]):
+        if isna(item["objectId"]):
             adds.loc[len(adds)] = item
         else:
             updates.loc[len(updates)] = item
