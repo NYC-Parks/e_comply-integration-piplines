@@ -35,7 +35,9 @@ def epoch_to_local_datetime(epoch: int) -> datetime:
 
 def to_json(obj: Any) -> str:
     if isinstance(obj, DataFrame):
-        return obj.to_json(orient="records", date_format="iso")
+        for col in obj.select_dtypes(include=["datetime"]):
+            obj[col] = obj[col].dt.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        return obj.to_json(orient="records")
     else:
         return dumps(obj)
 
@@ -157,13 +159,12 @@ def set_deltas(
 
 def configure_rotating_logger(
     filename: str,
-    directory: str | None = None,
+    directory: str,
     level: str = "INFO",
 ) -> None:
     from os import makedirs, path
 
-    dir_path = path.join("home", directory or "")
-    makedirs(dir_path, exist_ok=True)
+    makedirs(directory, exist_ok=True)
 
     config.dictConfig(
         {
@@ -179,7 +180,7 @@ def configure_rotating_logger(
                     "class": "logging.handlers.TimedRotatingFileHandler",
                     "level": level,
                     "formatter": "detailed",
-                    "filename": path.join(dir_path, filename),
+                    "filename": path.join(directory, filename),
                     "when": "midnight",  # Rotate logs at midnight
                     "interval": 1,  # Rotate every day
                     "encoding": "utf-8",
@@ -231,8 +232,8 @@ def apply_edits(context: dict) -> dict | None:
             )
 
         try:
-            result = context["repo"].apply_edits(layer_edits)
-            __logger.debug(f"Edits Result: {to_json(result)}")
+            context["result"] = context["repo"].apply_edits(layer_edits)
+            __logger.debug(f"Edits Result: {to_json(context['result'])}")
 
         except Exception as e:
             exception_handler(e)
@@ -252,7 +253,7 @@ def extract_changes(
             [
                 LayerServerGen(
                     layer_id,
-                    int(server_gen),
+                    server_gen,
                 )
             ]
         )
@@ -262,23 +263,20 @@ def extract_changes(
             "server_gen": changes["layerServerGens"][0]["serverGen"],
         }
 
-        object_ids: list[Any] = [
+        object_ids: list[int] = [
             *changes["edits"][0]["objectIds"]["adds"],
             *changes["edits"][0]["objectIds"]["updates"],
         ]
         if 0 == len(object_ids):
             return result
 
-        agg_where = f"OBJECTID IN ({join(object_ids)})" + (
-            "" if where == "" else f" AND {where}"
-        )
-
         result["changes"] = server.query(
             [
                 LayerQuery(
                     layer_id,
                     out_fields,
-                    agg_where,
+                    where,
+                    ",".join(str(id) for id in object_ids),
                 )
             ]
         )[layer_id]
@@ -411,6 +409,11 @@ def get_contract_edits(context: dict) -> dict | None:
     return context
 
 
+def post_contract_object_ids(context: dict) -> dict | None:
+
+    return context
+
+
 def query_contract_ids(context: dict) -> dict | None:
     layer_id = 1
 
@@ -431,9 +434,7 @@ def query_contract_ids(context: dict) -> dict | None:
         context["output"]["query_contract_ids"] = "No Contracts found."
         return None
 
-    context["contract_ids"] = (
-        [] if contracts.empty else contracts["ContractName"].tolist()
-    )
+    context["contract_ids"] = contracts["ContractName"].tolist()
     return context
 
 
@@ -452,7 +453,7 @@ def contract_associated_work_order_extract_changes(context: dict) -> dict | None
                 "Contract",
                 "LocationDetails",
                 "Project",
-                "PROJSTARTDATE",
+                "ProjStartDate",
                 "RecommendedSpecies",
                 "Status",
                 "Type",
@@ -477,6 +478,14 @@ def contract_associated_work_order_extract_changes(context: dict) -> dict | None
             ],
             f"Contract in ({join(context['contract_ids'])})",
         )
+        result["changes"] = result["changes"].rename(
+            columns={
+                "GlobalID": "WorkOrderGlobalID",
+                "RecommendedSpecies": "RecSpecies",
+                "LocationDetails": "Location",
+            },
+        )
+
         __logger.debug(
             f"Work Orders Extracted: {0 if result['changes'].empty else len(result['changes'])}"
         )
@@ -581,9 +590,8 @@ def query_work_order_associated_planting_space(context: dict) -> dict | None:
 
 def post_work_order_changes(context: dict) -> dict | None:
     edits = get_deltas(context)
-
     try:
-        response = context["service"].post_work_orders(to_json(edits))
+        response = context["service"].post_work_orders(edits)
 
     except Exception as e:
         exception_handler(e)
