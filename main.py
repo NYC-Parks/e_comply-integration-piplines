@@ -79,6 +79,7 @@ try:
             },
             get_contract_edits,
             apply_edits,
+            post_contract_new_object_ids
         ).get("output", ""),
     )
     __logger.info(
@@ -99,7 +100,6 @@ try:
             },
             query_domains,
             post_domains,
-            post_contract_new_object_ids
         ).get("output", ""),
     )
     __logger.info(
