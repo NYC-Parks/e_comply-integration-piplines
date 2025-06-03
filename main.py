@@ -99,6 +99,7 @@ try:
             },
             query_domains,
             post_domains,
+            post_contract_new_object_ids
         ).get("output", ""),
     )
     __logger.info(
@@ -111,7 +112,7 @@ try:
                 "server_gens_repo": e_comply_repo,
             },
             query_contract_ids,
-            contract_associated_work_order_extract_changes,
+            query_contract_associated_work_order,
             # static_workorders,
             query_work_order_associated_planting_space_globalid,
             query_work_order_associated_planting_space,
