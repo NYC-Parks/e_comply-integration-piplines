@@ -3,7 +3,7 @@ from inspect import currentframe
 from json import dumps
 from logging import Logger, config, getLogger
 from numpy import ndarray
-from pandas import DataFrame, Series, merge, isna
+from pandas import DataFrame, Series, concat, merge, isna
 from typing import Any, Callable, Literal
 from ParksGIS import (
     LayerDomainNames,
@@ -409,7 +409,31 @@ def get_contract_edits(context: dict) -> dict | None:
     return context
 
 
-def post_contract_object_ids(context: dict) -> dict | None:
+def post_contract_new_object_ids(context: dict) -> dict | None:
+    new_ids = DataFrame(context["result"][0]["addResults"])
+    new_ids = concat(
+        [
+            new_ids,
+            get_deltas(context)["adds"][
+                [
+                    "contractName",
+                    "contractType",
+                    "contractStatus",
+                    "borough",
+                    "fundingSource",
+                ]
+            ],
+        ],
+        axis=1,
+    )
+
+    try:
+        response = context["service"].post_contracts(new_ids)
+
+    except Exception as e:
+        exception_handler(e)
+
+    context["output"]["contract_post_new_ids"] = f"Contract Ids result: {response}"
 
     return context
 
@@ -438,7 +462,7 @@ def query_contract_ids(context: dict) -> dict | None:
     return context
 
 
-def contract_associated_work_order_extract_changes(context: dict) -> dict | None:
+def query_contract_associated_work_order(context: dict) -> dict | None:
     layer_id = 0
 
     try:
