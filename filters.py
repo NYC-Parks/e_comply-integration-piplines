@@ -59,18 +59,25 @@ def join(
 def separate_edits(
     data: DataFrame,
     id_key: str,
-    existing_ids: Series,
+    existing_ids: DataFrame,
 ) -> dict[str, DataFrame]:
-    ids = data[id_key]
-    new_ids = ids[ids.isin(existing_ids)]
+    if existing_ids.empty:
+        return {"adds": data.drop(columns=["objectId"])}
 
-    adds = data.loc[data[id_key].isin(new_ids)]
-    updates = data.loc[~data[id_key].isin(new_ids)]
+    adds = data.loc[~data[id_key].isin(existing_ids[id_key])]
+    updates = data.loc[data[id_key].isin(existing_ids[id_key])]
+
+    update_df(
+        updates,
+        existing_ids,
+        id_key,
+        {"OBJECTID": "OBJECTID"},
+    )
 
     result = {}
     __logger.debug(f"Adds: {len(adds)}")
     if 0 < len(adds):
-        result["adds"] = adds
+        result["adds"] = adds.drop(columns=["objectId"])
     __logger.debug(f"Updates: {len(updates)}")
     if 0 < len(updates):
         result["updates"] = updates
@@ -324,7 +331,7 @@ def query_server_gens(context: dict) -> dict:
 
 def apply_server_gens_edits(context: dict) -> dict | None:
     layer_id = 3
-    server_gens = context["server_gens"].copy()
+    server_gens = context["server_gens"]
 
     for i, col in enumerate(server_gens.columns):
         if col != "OBJECTID":
@@ -390,9 +397,7 @@ def get_contract_edits(context: dict) -> dict | None:
     from_date_time = epoch_to_local_datetime(context["server_gens"].at[0, "Contract"])
 
     try:
-        response = (
-            context["service"].get_contracts(from_date_time).drop(columns=["objectId"])
-        )
+        response = context["service"].get_contracts(from_date_time)
         __logger.debug(f"Contracts Recieved: {len(response)} \n{to_json(response)}")
 
     except Exception as e:
@@ -408,16 +413,17 @@ def get_contract_edits(context: dict) -> dict | None:
 
 def seperate_contract_edits(context: dict) -> dict[str, DataFrame]:
     layer_id = context["layer_id"]
-    existing_ids = (
-        context["repo"].query(
-            [
-                LayerQuery(
-                    layer_id,
-                    ["ContractName"],
-                )
-            ]
-        )[layer_id]
-    )["ContractName"]
+    existing_ids = context["repo"].query(
+        [
+            LayerQuery(
+                layer_id,
+                [
+                    "ContractName",
+                    "OBJECTID",
+                ],
+            )
+        ]
+    )[layer_id]
 
     edits = separate_edits(
         get_deltas(context),
@@ -744,7 +750,10 @@ def separate_line_item_edits(context: dict) -> dict[str, DataFrame]:
         [
             LayerQuery(
                 layer_id,
-                ["LineItemId"],
+                [
+                    "LineItemId",
+                    "OBJECTID",
+                ],
             )
         ]
     )[layer_id]
