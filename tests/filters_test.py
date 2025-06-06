@@ -196,7 +196,7 @@ def test_work_order_line_items_get_edits_no_changes(mock_service):
     }
 
     # Act
-    result = filters.get_work_order_line_items_edits(context)
+    result = filters.get_line_item_edits(context)
 
     # Assert
     assert result is None

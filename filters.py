@@ -3,7 +3,7 @@ from inspect import currentframe
 from json import dumps
 from logging import Logger, config, getLogger
 from numpy import ndarray
-from pandas import DataFrame, Series, concat, merge, isna
+from pandas import DataFrame, Series, merge
 from typing import Any, Callable, Literal
 from ParksGIS import (
     LayerDomainNames,
@@ -54,6 +54,28 @@ def join(
         return joined if len(joined) == 0 else f"'{joined}'"
     else:
         return ",".join(str(i) for i in items)
+
+
+def separate_edits(
+    data: DataFrame,
+    id_key: str,
+    existing_ids: Series,
+) -> dict[str, DataFrame]:
+    ids = data[id_key]
+    new_ids = ids[ids.isin(existing_ids)]
+
+    adds = data.loc[data[id_key].isin(new_ids)]
+    updates = data.loc[~data[id_key].isin(new_ids)]
+
+    result = {}
+    __logger.debug(f"Adds: {len(adds)}")
+    if 0 < len(adds):
+        result["adds"] = adds
+    __logger.debug(f"Updates: {len(updates)}")
+    if 0 < len(updates):
+        result["updates"] = updates
+
+    return result
 
 
 def filter_Nones(
@@ -113,11 +135,6 @@ def pipeline(
 
     if not funcs:
         raise ValueError("At least one function must be provided.")
-
-    if "log" in context:
-        __logger.info(context["log"])
-
-    context["output"] = {}
 
     result = context
     for _, func in enumerate(funcs):
@@ -286,26 +303,6 @@ def extract_changes(
         raise Exception(f"extract_changes: {e}")
 
 
-def _seperate_changes(changes: DataFrame) -> dict[str, DataFrame]:
-    adds = DataFrame(columns=changes.columns)
-    updates = DataFrame(columns=changes.columns)
-    for _, item in changes.iterrows():
-        if isna(item["objectId"]):
-            adds.loc[len(adds)] = item
-        else:
-            updates.loc[len(updates)] = item
-
-    deltas: dict[str, DataFrame] = {}
-    __logger.debug(f"Adds: {len(adds)}")
-    if 0 < len(adds):
-        deltas["adds"] = adds.drop(columns=["objectId"])
-    __logger.debug(f"Updates: {len(updates)}")
-    if 0 < len(updates):
-        deltas["updates"] = updates
-
-    return deltas
-
-
 def query_server_gens(context: dict) -> dict:
     try:
         layer_id = 3
@@ -351,7 +348,7 @@ def query_domains(context: dict) -> dict | None:
         context["domainValues"] = context["repo"].query_domains(
             [
                 LayerDomainNames(
-                    context["layerId"],
+                    context["layer_id"],
                     context["domainNames"],
                 )
             ]
@@ -376,11 +373,11 @@ def post_domains(context: dict) -> dict | None:
 
     try:
         response = context["service"].post_domain_values(domain_values)
+        __logger.info(f"Domain Values result: {response}")
 
     except Exception as e:
         exception_handler(e)
 
-    context["output"]["post_domains"] = f"Domain Values result: {response}"
     return context
 
 
@@ -393,47 +390,42 @@ def get_contract_edits(context: dict) -> dict | None:
     from_date_time = epoch_to_local_datetime(context["server_gens"].at[0, "Contract"])
 
     try:
-        response = context["service"].get_contracts(from_date_time)
+        response = (
+            context["service"].get_contracts(from_date_time).drop(columns=["objectId"])
+        )
         __logger.debug(f"Contracts Recieved: {len(response)} \n{to_json(response)}")
 
     except Exception as e:
         exception_handler(e)
 
     if 0 == len(response):
-        context["output"]["contract_get_edits"] = "No Contract Changes."
+        __logger.info("No Contract Changes.")
         return None
 
-    deltas = _seperate_changes(response)
-    set_deltas(context, deltas, layer_id)
-
+    set_deltas(context, response, layer_id)
     return context
 
 
-def post_contract_new_object_ids(context: dict) -> dict | None:
-    new_ids = DataFrame(context["result"][0]["addResults"])
-    new_ids = concat(
-        [
-            new_ids,
-            get_deltas(context)["adds"][
-                [
-                    "contractName",
-                    "contractType",
-                    "contractStatus",
-                    "borough",
-                    "fundingSource",
-                ]
-            ],
-        ],
-        axis=1,
+def seperate_contract_edits(context: dict) -> dict[str, DataFrame]:
+    layer_id = context["layer_id"]
+    existing_ids = (
+        context["repo"].query(
+            [
+                LayerQuery(
+                    layer_id,
+                    ["ContractName"],
+                )
+            ]
+        )[layer_id]
+    )["ContractName"]
+
+    edits = separate_edits(
+        get_deltas(context),
+        "contractName",
+        existing_ids,
     )
 
-    try:
-        response = context["service"].post_contracts(new_ids)
-
-    except Exception as e:
-        exception_handler(e)
-
-    context["output"]["contract_post_new_ids"] = f"Contract Ids result: {response}"
+    set_deltas(context, edits, layer_id)
 
     return context
 
@@ -455,7 +447,7 @@ def query_contract_ids(context: dict) -> dict | None:
         exception_handler(e)
 
     if contracts.empty:
-        context["output"]["query_contract_ids"] = "No Contracts found."
+        __logger.debug("No Contracts found.")
         return None
 
     context["contract_ids"] = contracts["ContractName"].tolist()
@@ -502,14 +494,6 @@ def query_contract_associated_work_order(context: dict) -> dict | None:
             ],
             f"Contract in ({join(context['contract_ids'])})",
         )
-        result["changes"] = result["changes"].rename(
-            columns={
-                "GlobalID": "WorkOrderGlobalID",
-                "RecommendedSpecies": "RecSpecies",
-                "LocationDetails": "Location",
-            },
-        )
-
         __logger.debug(
             f"Work Orders Extracted: {0 if result['changes'].empty else len(result['changes'])}"
         )
@@ -518,10 +502,22 @@ def query_contract_associated_work_order(context: dict) -> dict | None:
         exception_handler(e)
 
     if result["changes"].empty:
-        context["output"]["work_order_extract_changes"] = "No Work Order changes."
+        __logger.info("No Work Order changes.")
         return None
 
-    set_deltas(context, result["changes"], layer_id)
+    changes = (
+        result["changes"]
+        .rename(
+            columns={
+                "GlobalID": "WorkOrderGlobalID",
+                "RecommendedSpecies": "RecSpecies",
+                "LocationDetails": "Location",
+            },
+        )
+        .astype({"RecSpecies": "Int32"})
+    )
+    set_deltas(context, changes, layer_id)
+
     context["server_gens"].at[0, "WorkOrder"] = result["server_gen"]
     return context
 
@@ -616,16 +612,15 @@ def post_work_order_changes(context: dict) -> dict | None:
     edits = get_deltas(context)
     try:
         response = context["service"].post_work_orders(edits)
+        __logger.info(f"Work Orders result: {response}")
 
     except Exception as e:
         exception_handler(e)
 
-    context["output"]["work_orders_post_changes "] = f"Work Orders result: {response}"
     return context
 
 
 def get_work_order_edits(context: dict) -> dict | None:
-    layer_id = 0
     from_date_time = epoch_to_local_datetime(context["server_gens"].at[0, "WorkOrder"])
 
     try:
@@ -636,10 +631,10 @@ def get_work_order_edits(context: dict) -> dict | None:
         exception_handler(e)
 
     if 0 == len(response):
-        context["output"]["work_order_get_edits"] = "No Work Order changes."
+        __logger.info("No Work Order changes.")
         return None
 
-    set_deltas(context, {"updates": response}, layer_id)
+    set_deltas(context, {"updates": response}, context["layer_id"])
     return context
 
 
@@ -724,8 +719,7 @@ def update_work_order_associated_plantingSpace(context: dict) -> dict:
     return context
 
 
-def get_work_order_line_items_edits(context: dict) -> dict | None:
-    layer_id = 2
+def get_line_item_edits(context: dict) -> dict | None:
     from_date_time = epoch_to_local_datetime(context["server_gens"].at[0, "WorkOrder"])
 
     try:
@@ -736,12 +730,31 @@ def get_work_order_line_items_edits(context: dict) -> dict | None:
         exception_handler(e)
 
     if 0 == len(response):
-        context["output"][
-            "work_order_line_items_get_edits"
-        ] = "No Work Order Line Items Changes."
+        __logger.info("No Line Items changes.")
         return None
 
-    deltas = _seperate_changes(response)
-    set_deltas(context, deltas, layer_id)
+    set_deltas(context, response, context["layer_id"])
+
+    return context
+
+
+def separate_line_item_edits(context: dict) -> dict[str, DataFrame]:
+    layer_id = context["layer_id"]
+    existing_ids = context["repo"].query(
+        [
+            LayerQuery(
+                layer_id,
+                ["LineItemId"],
+            )
+        ]
+    )[layer_id]
+
+    edits = separate_edits(
+        get_deltas(context),
+        "lineItemId",
+        existing_ids,
+    )
+
+    set_deltas(context, edits, layer_id)
 
     return context

@@ -50,101 +50,98 @@ try:
     __logger.debug(f"ServerGens: {server_gens}")
 
     __logger.info("***Starting Pipelines***")
-    __logger.info(
-        pipeline(
-            {
-                "log": "**Pushing Contract Domain Values**",
-                "service": e_comply_service,
-                "repo": e_comply_repo,
-                "layerId": 1,
-                "domainNames": [
-                    "WOContract",
-                    "eComplyContractType",
-                    "eComplyContractStatus",
-                    "eComplyContractBorough",
-                    "eComplyContractFundingSource",
-                ],
-            },
-            query_domains,
-            post_domains,
-        ).get("output", ""),
+
+    __logger.info("**Pushing Contract Domain Values**")
+    pipeline(
+        {
+            "service": e_comply_service,
+            "repo": e_comply_repo,
+            "layer_id": 1,
+            "domainNames": [
+                "WOContract",
+                "eComplyContractType",
+                "eComplyContractStatus",
+                "eComplyContractBorough",
+                "eComplyContractFundingSource",
+            ],
+        },
+        query_domains,
+        post_domains,
     )
-    __logger.info(
-        pipeline(
-            {
-                "log": "**Pulling Contracts**",
-                "service": e_comply_service,
-                "repo": e_comply_repo,
-                "server_gens": server_gens.copy(),
-            },
-            get_contract_edits,
-            apply_edits,
-            post_contract_new_object_ids
-        ).get("output", ""),
+
+    __logger.info("**Pulling Contracts**")
+    pipeline(
+        {
+            "service": e_comply_service,
+            "repo": e_comply_repo,
+            "server_gens": server_gens.copy(),
+        },
+        get_contract_edits,
+        seperate_contract_edits,
+        apply_edits,
     )
-    __logger.info(
-        pipeline(
-            {
-                "log": "**Pushing Work Order Domain Values**",
-                "service": e_comply_service,
-                "repo": data_push_repo,
-                "layerId": 0,
-                "domainNames": [
-                    "WOType",
-                    "WOStatus",
-                    "WOProject",
-                    "WOPriority",
-                    "BoroughCode",
-                    "GenusSpecies",
-                ],
-            },
-            query_domains,
-            post_domains,
-        ).get("output", ""),
+
+    __logger.info("**Pushing Work Order Domain Values**")
+    pipeline(
+        {
+            "service": e_comply_service,
+            "repo": data_push_repo,
+            "layer_id": 0,
+            "domainNames": [
+                "WOType",
+                "WOStatus",
+                "WOProject",
+                "WOPriority",
+                "BoroughCode",
+                "GenusSpecies",
+            ],
+        },
+        query_domains,
+        post_domains,
     )
-    __logger.info(
-        pipeline(
-            {
-                "log": "**Pushing Work Orders**",
-                "service": e_comply_service,
-                "repo": data_push_repo,
-                "server_gens": server_gens.copy(),
-                "server_gens_repo": e_comply_repo,
-            },
-            query_contract_ids,
-            query_contract_associated_work_order,
-            # static_workorders,
-            query_work_order_associated_planting_space_globalid,
-            query_work_order_associated_planting_space,
-            post_work_order_changes,
-            apply_server_gens_edits,
-        ).get("output", ""),
+
+    __logger.info("**Pushing Work Orders**")
+    pipeline(
+        {
+            "service": e_comply_service,
+            "repo": data_push_repo,
+            "server_gens": server_gens.copy(),
+            "server_gens_repo": e_comply_repo,
+        },
+        query_contract_ids,
+        query_contract_associated_work_order,
+        # static_workorders,
+        query_work_order_associated_planting_space_globalid,
+        query_work_order_associated_planting_space,
+        post_work_order_changes,
+        apply_server_gens_edits,
     )
-    __logger.info(
-        pipeline(
-            {
-                "log": "**Pulling Work Orders**",
-                "service": e_comply_service,
-                "repo": data_push_repo,
-                "server_gens": server_gens.copy(),
-            },
-            get_work_order_edits,
-            update_work_order_associated_inspection,
-            update_work_order_associated_plantingSpace,
-            apply_edits,
-        ).get("output", ""),
+
+    __logger.info("**Pulling Work Orders**")
+    pipeline(
+        {
+            "service": e_comply_service,
+            "repo": data_push_repo,
+            "layer_id": 0,
+            "server_gens": server_gens.copy(),
+        },
+        get_work_order_edits,
+        update_work_order_associated_inspection,
+        update_work_order_associated_plantingSpace,
+        apply_edits,
     )
-    __logger.info(
-        pipeline(
-            {
-                "log": "**Pulling Work Order Line Items**",
-                "service": e_comply_service,
-                "repo": e_comply_repo,
-                "server_gens": server_gens.copy(),
-            },
-            get_work_order_line_items_edits,
-            apply_edits,
-        ).get("output", ""),
+
+    __logger.info("**Pulling Line Items**")
+    pipeline(
+        {
+            "service": e_comply_service,
+            "repo": e_comply_repo,
+            "layer_id": 2,
+            "server_gens": server_gens.copy(),
+        },
+        get_line_item_edits,
+        separate_line_item_edits,
+        apply_edits,
     )
 except Exception as e:
     __logger.exception(f"Unhandled Exception: {e}")

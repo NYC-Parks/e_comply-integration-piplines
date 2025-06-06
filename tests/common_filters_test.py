@@ -130,7 +130,7 @@ def test_seperate_changes():
     ]
 
     # Act
-    result = filters._seperate_changes(DataFrame(test_changes))
+    result = filters.seperate_contract_edits(DataFrame(test_changes))
 
     # Assert
     assert isinstance(result, dict)
@@ -148,7 +148,7 @@ def test_seperate_changes_all_adds():
     ]
 
     # Act
-    result = filters._seperate_changes(DataFrame(changes))
+    result = filters.seperate_contract_edits(DataFrame(changes))
 
     # Assert
     assert "adds" in result
@@ -164,7 +164,7 @@ def test_seperate_changes_all_updates():
     ]
 
     # Act
-    result = filters._seperate_changes(DataFrame(changes))
+    result = filters.seperate_contract_edits(DataFrame(changes))
 
     # Assert
     assert "updates" in result
