@@ -600,7 +600,7 @@ def query_work_order_associated_planting_space(context: dict) -> dict | None:
             )[layer_id]
             .rename(
                 columns={
-                    "GlobalID": "PlantingSpaceGlobalID",
+                    "GlobalID": "PlantingSpaceGlobalId",
                     "OBJECTID": "PlantingSpaceId",
                     "PlantingSpaceOnStreet": "OnStreetSite",
                 }
