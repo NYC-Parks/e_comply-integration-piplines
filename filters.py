@@ -1,3 +1,4 @@
+from copy import deepcopy
 from datetime import datetime
 from inspect import currentframe
 from json import dumps
@@ -34,12 +35,14 @@ def epoch_to_local_datetime(epoch: int) -> datetime:
 
 
 def to_json(obj: Any) -> str:
-    if isinstance(obj, DataFrame):
-        for col in obj.select_dtypes(include=["datetime"]):
-            obj[col] = obj[col].dt.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-        return obj.to_json(orient="records")
+    copy = obj.copy(deep=True) if isinstance(obj, DataFrame) else deepcopy(obj)
+
+    if isinstance(copy, DataFrame):
+        for col in copy.select_dtypes(include=["datetime"]):
+            copy[col] = copy[col].dt.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+        return copy.to_json(orient="records")
     else:
-        return dumps(obj)
+        return dumps(copy)
 
 
 def join(
@@ -62,12 +65,12 @@ def separate_edits(
     existing_ids: DataFrame,
 ) -> dict[str, DataFrame]:
     if existing_ids.empty:
-        return {"adds": data.drop(columns=["objectId"])}
+        return {"adds": data.drop(columns=["OBJECTID"])}
 
     adds = data.loc[~data[id_key].isin(existing_ids[id_key])]
     updates = data.loc[data[id_key].isin(existing_ids[id_key])]
 
-    update_df(
+    updates = update_df(
         updates,
         existing_ids,
         id_key,
@@ -77,7 +80,7 @@ def separate_edits(
     result = {}
     __logger.debug(f"Adds: {len(adds)}")
     if 0 < len(adds):
-        result["adds"] = adds.drop(columns=["objectId"])
+        result["adds"] = adds.drop(columns=["OBJECTID"])
     __logger.debug(f"Updates: {len(updates)}")
     if 0 < len(updates):
         result["updates"] = updates
@@ -427,7 +430,7 @@ def seperate_contract_edits(context: dict) -> dict[str, DataFrame]:
 
     edits = separate_edits(
         get_deltas(context),
-        "contractName",
+        "ContractName",
         existing_ids,
     )
 
@@ -709,7 +712,7 @@ def update_work_order_associated_plantingSpace(context: dict) -> dict:
     except Exception as e:
         exception_handler(e)
 
-    update_df(
+    edits = update_df(
         edits,
         plantingSpaces,
         key,
@@ -760,7 +763,7 @@ def separate_line_item_edits(context: dict) -> dict[str, DataFrame]:
 
     edits = separate_edits(
         get_deltas(context),
-        "lineItemId",
+        "LineItemId",
         existing_ids,
     )
 
