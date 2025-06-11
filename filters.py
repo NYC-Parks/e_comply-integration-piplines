@@ -572,7 +572,7 @@ def query_work_order_associated_planting_space(context: dict) -> dict | None:
     edits = DataFrame(get_deltas(context))
 
     try:
-        plantingSpaces = (
+        planting_spaces = (
             context["repo"]
             .query(
                 [
@@ -600,18 +600,20 @@ def query_work_order_associated_planting_space(context: dict) -> dict | None:
             )[layer_id]
             .rename(
                 columns={
-                    "GlobalID": "PlantingSpaceGlobalId",
+                    "GlobalID": "PlantingSpaceGlobalID",
                     "OBJECTID": "PlantingSpaceId",
                     "PlantingSpaceOnStreet": "OnStreetSite",
                 }
             )
         )
-        __logger.debug(f"Planting Spaces to hydrate: {len(plantingSpaces)}")
+        __logger.debug(f"Planting Spaces to hydrate: {len(planting_spaces)}")
 
     except Exception as e:
         exception_handler(e)
 
-    edits = merge(edits, plantingSpaces, on=key, how="left")
+    edits = merge(edits, planting_spaces, on=key, how="left").rename(
+        columns={"PlantingSpaceGlobalID": "PlantingSpaceGlobalId"}
+    )
     set_deltas(context, edits)
 
     return context
@@ -649,7 +651,7 @@ def get_work_order_edits(context: dict) -> dict | None:
 
 def update_work_order_associated_inspection(context: dict) -> dict | None:
     layer_id = 4
-    key = "plantingSpaceGlobalId"
+    key = "PlantingSpaceGlobalID"
     edits = DataFrame(get_deltas(context)["updates"])
 
     try:
@@ -688,7 +690,7 @@ def update_work_order_associated_inspection(context: dict) -> dict | None:
 
 def update_work_order_associated_plantingSpace(context: dict) -> dict:
     layer_id = 2
-    key = "plantingSpaceGlobalId"
+    key = "PlantingSpaceGlobalID"
     edits = DataFrame(get_deltas(context)["updates"])
 
     try:
