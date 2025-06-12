@@ -5,7 +5,7 @@ from json import dumps
 from logging import Logger, config, getLogger
 from numpy import ndarray
 from pandas import DataFrame, Series, merge
-from typing import Any, Callable, Literal
+from typing import Any, Callable
 from ParksGIS import (
     LayerDomainNames,
     LayerEdits,
@@ -98,6 +98,15 @@ def filter_Nones(
         return data[data[key].notna()]
     else:
         return data[data.notna()]
+
+
+def get_domains_values_as_lookup(domain_values: list[dict]) -> dict:
+    return {
+        domain["name"]: {
+            values["name"]: values["code"] for values in domain["codedValues"]
+        }
+        for domain in domain_values
+    }
 
 
 def update_df(
@@ -652,6 +661,8 @@ def get_work_order_edits(context: dict) -> dict | None:
 def update_work_order_associated_inspection(context: dict) -> dict | None:
     layer_id = 4
     key = "PlantingSpaceGlobalID"
+
+    status = get_domains_values_as_lookup(context["domain_values"])["WOStatus"]
     edits = DataFrame(get_deltas(context)["updates"])
 
     try:
@@ -662,6 +673,7 @@ def update_work_order_associated_inspection(context: dict) -> dict | None:
                     LayerQuery(
                         layer_id,
                         [
+                            key,
                             "OBJECTID",
                             "HasActiveWorkOrder",
                         ],
@@ -676,47 +688,54 @@ def update_work_order_associated_inspection(context: dict) -> dict | None:
     except Exception as e:
         exception_handler(e)
 
-    edits = merge(inspections, edits, on=key, how="left")
-    edits.loc[
-        edits["Status"] == Literal["Closed", "Canceled"], "HasActiveWorkOrder"
+    inspections = merge(inspections, edits, on=key, how="left")
+    inspections.loc[
+        edits["Status"] == status["Closed"] | status["Canceled"], "HasActiveWorkOrder"
     ] = 0
-    edits = DataFrame(edits["InspectionOBJECTID", "HasActiveWorkOrder"])
-    edits.rename(columns={"InspectionOBJECTID": "OBJECTID"})
+    inspections = DataFrame(
+        inspections["InspectionOBJECTID", "HasActiveWorkOrder"]
+    ).rename(columns={"InspectionOBJECTID": "OBJECTID"})
     __logger.debug(to_json(edits))
 
-    context["deltas"][layer_id] = {"updates": edits}
+    context["deltas"][layer_id] = {"updates": inspections}
     return context
 
 
 def update_work_order_associated_plantingSpace(context: dict) -> dict:
     layer_id = 2
     key = "PlantingSpaceGlobalID"
+    global_id = "GlobalID"
     edits = DataFrame(get_deltas(context)["updates"])
 
     try:
-        plantingSpaces = context["repo"].query(
-            [
-                LayerQuery(
-                    layer_id,
-                    [
-                        "GlobalID",
-                        "BuildingNumber",
-                        "StreetName",
-                        "CrossStreet1",
-                        "CrossStreet2",
-                    ],
-                    f"GlobalID IN ({join(edits[key], True)})",
-                )
-            ]
-        )[layer_id]
-        __logger.debug(f"Planting Spaces To Update: {len(plantingSpaces)}")
+        planting_spaces = (
+            context["repo"]
+            .query(
+                [
+                    LayerQuery(
+                        layer_id,
+                        [
+                            global_id,
+                            "OBJECTID",
+                            "BuildingNumber",
+                            "StreetName",
+                            "CrossStreet1",
+                            "CrossStreet2",
+                        ],
+                        f"{global_id} IN ({join(edits[key], True)})",
+                    )
+                ]
+            )[layer_id]
+            .rename(columns={global_id: key})
+        )
+        __logger.debug(f"Planting Spaces To Update: {len(planting_spaces)}")
 
     except Exception as e:
         exception_handler(e)
 
-    edits = update_df(
+    planting_spaces = update_df(
+        planting_spaces,
         edits,
-        plantingSpaces,
         key,
         {
             "BuildingNumber": "BuildingNumber",
@@ -724,9 +743,9 @@ def update_work_order_associated_plantingSpace(context: dict) -> dict:
             "CrossStreet1": "CrossStreet1",
             "CrossStreet2": "CrossStreet2",
         },
-    )
+    ).rename(columns={key: global_id})
 
-    context["deltas"][layer_id] = {"updates": plantingSpaces}
+    context["deltas"][layer_id] = {"updates": planting_spaces}
     return context
 
 
