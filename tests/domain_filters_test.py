@@ -229,7 +229,7 @@ def test_wo_update_associated_inspection(mock_repo):
     }
 
     # Act
-    result = filters.update_work_order_associated_inspection(context)
+    result = filters.update_inspections(context)
 
     # Assert
     assert 4 in result["deltas"]
@@ -262,7 +262,7 @@ def test_wo_update_associated_platingSpace(mock_repo):
     }
 
     # Act
-    result = filters.update_work_order_associated_plantingSpace(context)
+    result = filters.update_planting_spaces(context)
 
     # Assert
     assert 2 in result["deltas"]

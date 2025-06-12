@@ -262,7 +262,7 @@ def test_wo_update_associated_platingSpace(mock_repo):
     }
 
     # Act
-    result = filters.update_work_order_associated_plantingSpace(context)
+    result = filters.update_planting_spaces(context)
 
     # Assert
     assert 2 in result["deltas"]

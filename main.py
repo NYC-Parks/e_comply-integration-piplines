@@ -128,8 +128,10 @@ try:
         },
         get_work_order_edits,
         query_domains,
-        update_work_order_associated_inspection,
-        update_work_order_associated_plantingSpace,
+        query_associated_inspections,
+        update_inspections,
+        query_associated_planting_spaces,
+        update_planting_spaces,
         apply_edits,
     )
 
