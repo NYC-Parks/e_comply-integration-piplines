@@ -34,8 +34,8 @@ try:
     data_push_repo = factory.create("DataPush/ForMSDataPush/FeatureServer")
 
     # Set eComply Environemnt
-    e_comply = "https://nycparks-test.ecomply.us"
-    # e_comply = "https://nycparks-stage.ecomply.us"
+    # e_comply = "https://nycparks-test.ecomply.us"
+    e_comply = "https://nycparks-stage.ecomply.us"
 
     e_comply_service = API(
         url=f"{e_comply}/WebAPI",
