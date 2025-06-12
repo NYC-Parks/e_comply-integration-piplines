@@ -460,19 +460,19 @@ def query_contract_ids(context: dict) -> dict | None:
                 )
             ]
         )[layer_id]
+        __logger.debug(f"Contract ids found: {len(contracts)}")
 
     except Exception as e:
         exception_handler(e)
 
     if contracts.empty:
-        __logger.debug("No Contracts found.")
         return None
+    else:
+        context["contract_ids"] = contracts["ContractName"].tolist()
+        return context
 
-    context["contract_ids"] = contracts["ContractName"].tolist()
-    return context
 
-
-def query_contract_associated_work_order(context: dict) -> dict | None:
+def query_contract_associated_work_orders(context: dict) -> dict | None:
     layer_id = 0
 
     try:
@@ -540,7 +540,9 @@ def query_contract_associated_work_order(context: dict) -> dict | None:
     return context
 
 
-def query_work_order_associated_planting_space_globalid(context: dict) -> dict | None:
+def hydrate_work_order_associated_planting_space_global_ids(
+    context: dict,
+) -> dict | None:
     layer_id = 4
     key = "InspectionGlobalID"
     edits = DataFrame(get_deltas(context))
@@ -575,7 +577,7 @@ def query_work_order_associated_planting_space_globalid(context: dict) -> dict |
     return context
 
 
-def query_work_order_associated_planting_space(context: dict) -> dict | None:
+def hydrate_work_order_associated_planting_spaces(context: dict) -> dict | None:
     layer_id = 2
     key = "PlantingSpaceGlobalID"
     edits = DataFrame(get_deltas(context))

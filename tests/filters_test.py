@@ -88,7 +88,7 @@ def test_work_order_extract_changes_no_changes(stub_extract_changes, mock_repo):
     stub_extract_changes.return_value = {"changes": None, "server_gen": 12345}
 
     # Act
-    result = filters.query_contract_associated_work_order(context)
+    result = filters.query_contract_associated_work_orders(context)
 
     # Assert
     assert result is None

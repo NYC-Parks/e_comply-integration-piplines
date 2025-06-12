@@ -68,7 +68,7 @@ def test_work_order_extract_changes(stub_extract_changes, mock_repo):
     }
 
     # Act
-    result = filters.query_contract_associated_work_order(context)
+    result = filters.query_contract_associated_work_orders(context)
 
     # Assert
     assert "deltas" in result
@@ -88,7 +88,7 @@ def test_work_order_extract_changes_no_changes(stub_extract_changes, mock_repo):
     stub_extract_changes.return_value = {"changes": None, "server_gen": 12345}
 
     # Act
-    result = filters.query_contract_associated_work_order(context)
+    result = filters.query_contract_associated_work_orders(context)
 
     # Assert
     assert result is None
@@ -114,7 +114,7 @@ def test_wo_query_associated_planting_space_globalid(mock_repo):
     }
 
     # Act
-    result = filters.query_work_order_associated_planting_space_globalid(context)
+    result = filters.hydrate_work_order_associated_planting_space_global_ids(context)
 
     # Assert
     assert "PlantingSpaceGlobalID" in result["deltas"][0].columns
@@ -141,7 +141,7 @@ def test_wo_query_associated_planting_space(mock_repo):
     }
 
     # Act
-    result = filters.query_work_order_associated_planting_space(context)
+    result = filters.hydrate_work_order_associated_planting_spaces(context)
 
     # Assert
     assert "ParkName" in result["deltas"][0].columns

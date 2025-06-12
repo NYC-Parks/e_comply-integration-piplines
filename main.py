@@ -34,8 +34,8 @@ try:
     data_push_repo = factory.create("DataPush/ForMSDataPush/FeatureServer")
 
     # Set eComply Environemnt
-    # e_comply = "https://nycparks-test.ecomply.us"
-    e_comply = "https://nycparks-stage.ecomply.us"
+    e_comply = "https://nycparks-test.ecomply.us"
+    # e_comply = "https://nycparks-stage.ecomply.us"
 
     e_comply_service = API(
         url=f"{e_comply}/WebAPI",
@@ -109,10 +109,10 @@ try:
             "server_gens_repo": e_comply_repo,
         },
         query_contract_ids,
-        query_contract_associated_work_order,
+        query_contract_associated_work_orders,
         # static_workorders,
-        query_work_order_associated_planting_space_globalid,
-        query_work_order_associated_planting_space,
+        hydrate_work_order_associated_planting_space_global_ids,
+        hydrate_work_order_associated_planting_spaces,
         post_work_order_changes,
         apply_server_gens_edits,
     )
